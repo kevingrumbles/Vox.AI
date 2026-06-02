@@ -1,2 +1,2 @@
-﻿using var game = new Vox.AI.Game1();
+﻿using var game = new Vox.AI.VoxGame();
 game.Run();
