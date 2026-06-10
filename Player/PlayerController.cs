@@ -1,6 +1,7 @@
 // Architecture: Handles all player input in one place: mouse look, WASD + Space movement,
 // and block interaction via a simple DDA-style raycast.
-// Movement is always horizontal-relative to camera yaw so the player doesn't fly when looking up.
+// W/S movement follows the camera's full 3-D forward vector (pitch included).
+// A/D strafing uses the horizontal right vector (Camera.Right has no Y component).
 // Tab toggles mouse capture (useful for debugging without restarting).
 // Keys 1/2/3 select the block type to place.
 
@@ -94,21 +95,17 @@ public sealed class PlayerController
 
     private void HandleMovement(KeyboardState kb, float dt)
     {
-        // Flatten Forward onto the XZ plane so walking doesn't drift up/down
-        var flatForward = new Vector3(_camera.Forward.X, 0, _camera.Forward.Z);
-        if (flatForward.LengthSquared() > 0.001f)
-            flatForward = Vector3.Normalize(flatForward);
-
-        var flatRight = new Vector3(_camera.Right.X, 0, _camera.Right.Z);
-        if (flatRight.LengthSquared() > 0.001f)
-            flatRight = Vector3.Normalize(flatRight);
+        // W/S follow the camera's full forward direction (including pitch).
+        // A/D use the right vector which has no Y component, so strafing stays level.
+        var forward = _camera.Forward;
+        var right   = _camera.Right;
 
         var move = Vector3.Zero;
 
-        if (kb.IsKeyDown(Keys.W))          move += flatForward;
-        if (kb.IsKeyDown(Keys.S))          move -= flatForward;
-        if (kb.IsKeyDown(Keys.D))          move += flatRight;
-        if (kb.IsKeyDown(Keys.A))          move -= flatRight;
+        if (kb.IsKeyDown(Keys.W))          move += forward;
+        if (kb.IsKeyDown(Keys.S))          move -= forward;
+        if (kb.IsKeyDown(Keys.D))          move += right;
+        if (kb.IsKeyDown(Keys.A))          move -= right;
         if (kb.IsKeyDown(Keys.Space))      move += Vector3.Up;
         if (kb.IsKeyDown(Keys.LeftShift))  move -= Vector3.Up;
 

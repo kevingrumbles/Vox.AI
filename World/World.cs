@@ -1,5 +1,10 @@
 // Architecture: Manages the collection of all loaded chunks.
 // Translates world-space block coordinates to chunk + local coordinates.
+//
+// Construction now requires a WorldPersistenceManager so that:
+//   1. TerrainGenerator is seeded from WorldMetadata.Seed (deterministic).
+//   2. Each chunk is generated then overlaid with any persisted player modifications.
+//
 // SetBlock marks only the owning chunk dirty; cross-chunk neighbour invalidation
 // is a known limitation acceptable for this prototype.
 
@@ -7,38 +12,46 @@ using System;
 using System.Collections.Generic;
 using Vox.AI.Blocks;
 using Vox.AI.Generation;
+using Vox.AI.World.Persistence;
 
 namespace Vox.AI.World;
 
 public class World
 {
     private readonly Dictionary<(int, int, int), Chunk> _chunks = new();
-    private readonly TerrainGenerator _generator = new();
+    private readonly TerrainGenerator                   _generator;
+    private readonly WorldPersistenceManager            _persistence;
 
     /// <summary>Half-width in chunks. 3 → 7×7 grid = 49 chunks.</summary>
     public const int ChunkRadius = 3;
 
     public IEnumerable<Chunk> Chunks => _chunks.Values;
 
-    public World()
+    public World(WorldPersistenceManager persistence)
     {
+        _persistence = persistence;
+
+        // Seed the generator from the stored metadata so terrain is always reproducible.
+        _generator = new TerrainGenerator((int)persistence.Metadata.Seed);
+
         GenerateInitialWorld();
     }
 
     private void GenerateInitialWorld()
     {
-        // One-layer-tall world: a flat grid of chunks at Y = 0
+        // One-layer-tall world: a flat grid of chunks at Y = 0.
+        // LoadChunk handles: generate → apply saved modifications → mark IsDirty.
         for (int cx = -ChunkRadius; cx <= ChunkRadius; cx++)
         for (int cz = -ChunkRadius; cz <= ChunkRadius; cz++)
         {
             var coord = (cx, 0, cz);
             var chunk = new Chunk(coord);
-            _generator.Generate(chunk);
+            _persistence.LoadChunk(chunk, _generator);
             _chunks[coord] = chunk;
         }
     }
 
-    public Chunk GetChunk(int cx, int cy, int cz)
+    public Chunk? GetChunk(int cx, int cy, int cz)
     {
         _chunks.TryGetValue((cx, cy, cz), out var chunk);
         return chunk;
@@ -62,6 +75,21 @@ public class World
         GetChunk(cx, cy, cz)?.SetBlock(lx, ly, lz, id);
     }
 
+    /// <summary>
+    /// Queues all dirty chunks for background save and writes world.meta.
+    /// Non-blocking — returns after enqueuing; use FlushAndSave for a guaranteed write.
+    /// </summary>
+    public void Save() => _persistence.SaveWorld(_chunks.Values);
+
+    /// <summary>Synchronously saves all dirty chunks and metadata. Use at shutdown.</summary>
+    public void FlushAndSave()
+    {
+        foreach (var chunk in _chunks.Values)
+            if (chunk.HasUnsavedChanges)
+                _persistence.SaveChunk(chunk);
+        _persistence.SaveMetadata();
+    }
+
     // Converts a world-axis value to (chunkIndex, localIndex).
     // Uses floor division so negative coordinates are handled correctly.
     private static (int chunkIdx, int local) ToChunkLocal(int w)
@@ -71,3 +99,4 @@ public class World
         return (chunkIdx, local);
     }
 }
+
