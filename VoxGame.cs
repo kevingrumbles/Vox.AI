@@ -33,7 +33,7 @@ public class VoxGame : Game
     // Cached rasterizer states — created once to avoid per-frame allocations
     private RasterizerState _solidState;
     private RasterizerState _wireState;
-    private bool             _wireframe;
+    private bool            _wireframe;
 
     private KeyboardState _prevKeyboard;
 
