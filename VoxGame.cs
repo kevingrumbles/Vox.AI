@@ -99,7 +99,7 @@ public class VoxGame : Game
 
     protected override void LoadContent()
     {
-        _atlas = TextureGenerator.CreateAtlas(GraphicsDevice);
+        _atlas = TextureGenerator.LoadAtlas(GraphicsDevice);
 
         _effect = new BasicEffect(GraphicsDevice)
         {

@@ -1,0 +1,89 @@
+{
+  "name": "Vox.AI.Atlas",
+  "atlas_size": 512,
+  "cell_size": 128,
+  "padding": 0,
+  "background": "preview",
+  "export_format": "PNG",
+  "preview_bg_color": "#071012",
+  "preview_bg_alpha": 255,
+  "export_path": "C:\\Users\\kevin\\Downloads\\Atlas_Maker_V1.1\\Exports",
+  "source_images_path": "C:\\Users\\kevin\\Downloads\\Atlas_Maker_V1.1\\images",
+  "slots": {
+    "0_0": {
+      "path": "C:/repo/Vox.AI/Art/GrassTop.png",
+      "w": 1,
+      "h": 1
+    },
+    "0_1": {
+      "path": "C:/repo/Vox.AI/Art/GrassSide.png",
+      "w": 1,
+      "h": 1
+    },
+    "0_2": {
+      "path": "C:/repo/Vox.AI/Art/Dirt.png",
+      "w": 1,
+      "h": 1
+    },
+    "0_3": {
+      "path": "C:/repo/Vox.AI/Art/Stone.png",
+      "w": 1,
+      "h": 1
+    },
+    "1_0": {
+      "path": "C:/repo/Vox.AI/Art/Samd.png",
+      "w": 1,
+      "h": 1
+    },
+    "1_1": {
+      "path": "C:/repo/Vox.AI/Art/Water.png",
+      "w": 1,
+      "h": 1
+    },
+    "1_2": {
+      "path": "C:/repo/Vox.AI/Art/WoodTop.png",
+      "w": 1,
+      "h": 1
+    },
+    "1_3": {
+      "path": "C:/repo/Vox.AI/Art/WoodSide.png",
+      "w": 1,
+      "h": 1
+    },
+    "2_0": {
+      "path": "C:/repo/Vox.AI/Art/Leaves.png",
+      "w": 1,
+      "h": 1
+    },
+    "2_1": {
+      "path": null
+    },
+    "2_2": {
+      "path": null
+    },
+    "2_3": {
+      "path": null
+    },
+    "3_0": {
+      "path": null
+    },
+    "3_1": {
+      "path": null
+    },
+    "3_2": {
+      "path": null
+    },
+    "3_3": {
+      "path": null
+    }
+  },
+  "exclude_cols_right": 0,
+  "exclude_rows_bottom": 0,
+  "override_export_size": false,
+  "export_width_override": 512,
+  "export_height_override": 512,
+  "use_bleed": false,
+  "bleed_pixels": 50,
+  "bleed_depth": 1,
+  "bleed_bias": 1.0
+}

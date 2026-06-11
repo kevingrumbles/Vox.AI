@@ -10,8 +10,13 @@
 //
 // Tiles 9–15 are filled with a magenta "missing texture" colour so they
 // are immediately visible if a block definition references an undefined tile.
+//
+// Atlas loading priority:
+//   1. Content/Textures/voxel_atlas.png  (artist-authored file next to the executable)
+//   2. Procedurally generated fallback   (always available, no asset pipeline needed)
 
 using System;
+using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Vox.AI.Blocks;
@@ -22,6 +27,30 @@ public static class TextureGenerator
 {
     private const int TileSize  = 16;
     private const int AtlasSize = TileSize * TextureAtlas.Columns;   // 64×64
+
+    /// <summary>
+    /// Relative path (from the executable directory) where an artist-authored
+    /// atlas PNG is expected.  Drop a file there to override the procedural atlas.
+    /// </summary>
+    public const string AtlasFilePath = "Art/Vox.AI.Atlas.png";
+
+    /// <summary>
+    /// Returns a texture atlas, preferring an on-disk PNG over the procedural fallback.
+    /// If the file exists it is loaded directly; otherwise <see cref="CreateAtlas"/> is used.
+    /// </summary>
+    public static Texture2D LoadAtlas(GraphicsDevice device)
+    {
+        string fullPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, AtlasFilePath);
+
+        if (File.Exists(fullPath))
+        {
+            using var stream = File.OpenRead(fullPath);
+            return Texture2D.FromStream(device, stream);
+        }
+
+        return CreateAtlas(device);
+    }
 
     public static Texture2D CreateAtlas(GraphicsDevice device)
     {
