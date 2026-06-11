@@ -3,13 +3,17 @@
 // Neighbour lookups cross chunk boundaries via the World reference.
 // The mesh is rebuilt lazily: call Build() when Chunk.IsDirty is true.
 //
-// Texture pipeline per face (all UV work happens here, never in the render loop):
+// Lighting pipeline per face vertex (all work happens here, never in the render loop):
 //   block ID + BlockFace  →  BlockRegistry.GetTextureForFace  →  tileIndex
 //   tileIndex             →  TextureAtlas.GetUVs              →  4 UV corners
+//   faceIndex             →  LightData.ForFace                →  directional brightness
+//   chunk sunlight        →  LightData.SunlightToFloat        →  sun brightness
+//   3 neighbour blocks    →  AmbientOcclusionCalculator       →  per-vertex AO (0–3)
+//   combined              →  vertex Color                     →  baked into mesh
 //
-// CullMode.None is used in the prototype so winding order is not critical,
-// but faces are defined consistently (top-left → top-right → bottom-right → bottom-left)
-// to make future backface-culling easy to enable.
+// VertexPositionColorTexture carries position, a baked lighting colour, and UV.
+// BasicEffect must have both TextureEnabled and VertexColorEnabled set to true.
+// The GPU multiplies texture colour × vertex colour, producing lit textured blocks.
 
 using System;
 using System.Collections.Generic;
@@ -17,6 +21,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Vox.AI.Blocks;
 using Vox.AI.World;
+using Vox.AI.World.Lighting;
 
 namespace Vox.AI.Rendering;
 
@@ -42,11 +47,12 @@ public sealed class ChunkMesh : IDisposable
 
     /// <summary>
     /// Rebuilds the mesh from current block data.
+    /// Lighting (sunlight + AO) must be calculated before calling this.
     /// Uploads new buffers to the GPU and discards old ones.
     /// </summary>
     public void Build(Chunk chunk, Vox.AI.World.World world, GraphicsDevice device)
     {
-        var vertices = new List<VertexPositionTexture>(2048);
+        var vertices = new List<VertexPositionColorTexture>(2048);
         var indices  = new List<int>(4096);
 
         for (int lx = 0; lx < Chunk.Size; lx++)
@@ -56,10 +62,12 @@ public sealed class ChunkMesh : IDisposable
             byte id = chunk.GetBlock(lx, ly, lz);
             if (!BlockRegistry.IsSolid(id)) continue;
 
-            // World-space block origin
-            float bx = chunk.WorldPosition.X + lx;
-            float by = chunk.WorldPosition.Y + ly;
-            float bz = chunk.WorldPosition.Z + lz;
+            // World-space block origin (integer — avoids float accumulation error)
+            int wx = (int)chunk.WorldPosition.X + lx;
+            int wy = (int)chunk.WorldPosition.Y + ly;
+            int wz = (int)chunk.WorldPosition.Z + lz;
+
+            byte sunlight = chunk.GetSunlight(lx, ly, lz);
 
             for (int faceIdx = 0; faceIdx < 6; faceIdx++)
             {
@@ -71,16 +79,29 @@ public sealed class ChunkMesh : IDisposable
                                   ny >= 0 && ny < Chunk.Size &&
                                   nz >= 0 && nz < Chunk.Size)
                     ? chunk.GetBlock(nx, ny, nz)
-                    : world.GetBlock((int)(bx + dx), (int)(by + dy), (int)(bz + dz));
+                    : world.GetBlock(wx + dx, wy + dy, wz + dz);
 
                 if (BlockRegistry.IsSolid(neighbour)) continue;   // face is hidden
 
-                // Resolve tile index via registry — no raw atlas coordinates here
+                // UV coordinates — no raw atlas coordinates here
                 int tileIndex = BlockRegistry.GetTextureForFace(id, (BlockFace)faceIdx);
                 var (tl, tr, br, bl) = TextureAtlas.GetUVs(tileIndex);
 
+                // Per-vertex AO (0–3; 0 = open, 3 = deeply occluded corner)
+                var (aoTL, aoTR, aoBR, aoBL) =
+                    AmbientOcclusionCalculator.Calculate(world, wx, wy, wz, faceIdx);
+
+                // Bake lighting into per-vertex colours
+                Color cTL = BakeVertexColor(sunlight, aoTL, faceIdx);
+                Color cTR = BakeVertexColor(sunlight, aoTR, faceIdx);
+                Color cBR = BakeVertexColor(sunlight, aoBR, faceIdx);
+                Color cBL = BakeVertexColor(sunlight, aoBL, faceIdx);
+
                 int baseIdx = vertices.Count;
-                AddFaceVertices(vertices, bx, by, bz, faceIdx, tl, tr, br, bl);
+                AddFaceVertices(vertices,
+                    (float)wx, (float)wy, (float)wz, faceIdx,
+                    tl, tr, br, bl,
+                    cTL, cTR, cBR, cBL);
 
                 // Two triangles per face (counter-clockwise — faces viewed from outside)
                 indices.Add(baseIdx + 0); indices.Add(baseIdx + 1); indices.Add(baseIdx + 2);
@@ -97,7 +118,7 @@ public sealed class ChunkMesh : IDisposable
 
         if (_indexCount == 0) return;
 
-        _vertexBuffer = new VertexBuffer(device, VertexPositionTexture.VertexDeclaration,
+        _vertexBuffer = new VertexBuffer(device, VertexPositionColorTexture.VertexDeclaration,
                                          vertices.Count, BufferUsage.WriteOnly);
         _vertexBuffer.SetData(vertices.ToArray());
 
@@ -106,49 +127,60 @@ public sealed class ChunkMesh : IDisposable
         _indexBuffer.SetData(indices.ToArray());
     }
 
+    // Converts sunlight + AO + face directional factor into a single vertex colour.
+    // Result is a greyscale Color; the GPU multiplies it by the texture sample.
+    private static Color BakeVertexColor(byte sunlight, byte ao, int faceIdx)
+    {
+        float light = new VoxelLight(sunlight, ao).Brightness(faceIdx);
+        light = Math.Clamp(light, 0f, 1f);
+        byte b = (byte)(light * 255f);
+        return new Color(b, b, b, (byte)255);
+    }
+
     // Emits 4 vertices for a face in order: top-left, top-right, bottom-right, bottom-left.
     private static void AddFaceVertices(
-        List<VertexPositionTexture> verts,
+        List<VertexPositionColorTexture> verts,
         float bx, float by, float bz, int face,
-        Vector2 tl, Vector2 tr, Vector2 br, Vector2 bl)
+        Vector2 tl, Vector2 tr, Vector2 br, Vector2 bl,
+        Color cTL, Color cTR, Color cBR, Color cBL)
     {
         switch (face)
         {
             case 0: // Top (+Y) — viewed from above
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by + 1, bz),     tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz),     tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz + 1), br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by + 1, bz + 1), bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by + 1, bz),     cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz),     cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz + 1), cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by + 1, bz + 1), cBL, bl));
                 break;
             case 1: // Bottom (-Y) — viewed from below
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by, bz + 1), tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by, bz + 1), tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by, bz),     br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by, bz),     bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by, bz + 1), cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by, bz + 1), cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by, bz),     cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by, bz),     cBL, bl));
                 break;
             case 2: // Front (+Z)
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by + 1, bz + 1), tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz + 1), tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by,     bz + 1), br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by,     bz + 1), bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by + 1, bz + 1), cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz + 1), cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by,     bz + 1), cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by,     bz + 1), cBL, bl));
                 break;
             case 3: // Back (-Z)
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz), tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by + 1, bz), tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx,   by,     bz), br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by,     bz), bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz), cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by + 1, bz), cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx,   by,     bz), cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by,     bz), cBL, bl));
                 break;
             case 4: // Right (+X)
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz + 1), tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by + 1, bz),     tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by,     bz),     br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx+1, by,     bz + 1), bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz + 1), cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by + 1, bz),     cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by,     bz),     cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx+1, by,     bz + 1), cBL, bl));
                 break;
             case 5: // Left (-X)
-                verts.Add(new VertexPositionTexture(new Vector3(bx, by + 1, bz),     tl));
-                verts.Add(new VertexPositionTexture(new Vector3(bx, by + 1, bz + 1), tr));
-                verts.Add(new VertexPositionTexture(new Vector3(bx, by,     bz + 1), br));
-                verts.Add(new VertexPositionTexture(new Vector3(bx, by,     bz),     bl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx, by + 1, bz),     cTL, tl));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx, by + 1, bz + 1), cTR, tr));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx, by,     bz + 1), cBR, br));
+                verts.Add(new VertexPositionColorTexture(new Vector3(bx, by,     bz),     cBL, bl));
                 break;
         }
     }
@@ -169,4 +201,5 @@ public sealed class ChunkMesh : IDisposable
         _indexBuffer?.Dispose();
     }
 }
+
 

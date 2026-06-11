@@ -19,12 +19,12 @@ internal static class AtlasPalette
     public static readonly Color GrassTopLight   = new( 72, 110,  45);   // solid green (gradient start = end)
 
     public static readonly Color GrassSideTop    = GrassTopLight;   // same green as grass top
-    public static readonly Color GrassSideBottom = DirtBase;   // blends into dirt
+    public static readonly Color GrassSideBottom = new(100, 60, 20);   // blends into dirt
 
     // -----------------------------------------------------------------------
     // Dirt
     // -----------------------------------------------------------------------
-    public static readonly Color DirtBase        = new(100,  60,  20);   // earthy brown
+    public static readonly Color DirtBase        = GrassSideBottom;   // earthy brown
 
     // -----------------------------------------------------------------------
     // Stone

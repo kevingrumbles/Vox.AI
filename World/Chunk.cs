@@ -11,9 +11,11 @@
 //
 // ChunkCoord is in chunk-space; multiply by Size to get world-space origin.
 
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Vox.AI.Blocks;
+using Vox.AI.World.Lighting;
 using Vox.AI.World.Persistence;
 
 namespace Vox.AI.World;
@@ -28,7 +30,8 @@ public class Chunk
     /// <summary>World-space position of this chunk's (0,0,0) corner.</summary>
     public readonly Vector3 WorldPosition;
 
-    private readonly byte[,,] _blocks = new byte[Size, Size, Size];
+    private readonly byte[,,] _blocks   = new byte[Size, Size, Size];
+    private readonly byte[,,] _sunlight = new byte[Size, Size, Size];
 
     // Per-block modification tracking: key = flat BlockIndex, value = current BlockId.
     // Only populated by player SetBlock calls and by ApplyModification during load.
@@ -64,6 +67,32 @@ public class Chunk
         if ((uint)x >= Size || (uint)y >= Size || (uint)z >= Size)
             return BlockId.Air;
         return _blocks[x, y, z];
+    }
+
+    // -----------------------------------------------------------------------
+    // Sunlight access
+    // -----------------------------------------------------------------------
+
+    /// <summary>Returns the sunlight level (0–15) at local coordinates, or 0 if out of range.</summary>
+    public byte GetSunlight(int x, int y, int z)
+    {
+        if ((uint)x >= Size || (uint)y >= Size || (uint)z >= Size)
+            return 0;
+        return _sunlight[x, y, z];
+    }
+
+    /// <summary>Sets the sunlight level at local coordinates. Called only by SunlightCalculator.</summary>
+    internal void SetSunlight(int x, int y, int z, byte level)
+    {
+        if ((uint)x >= Size || (uint)y >= Size || (uint)z >= Size)
+            return;
+        _sunlight[x, y, z] = level;
+    }
+
+    /// <summary>Resets all sunlight values to zero. Call before recalculating lighting.</summary>
+    internal void ClearSunlight()
+    {
+        Array.Clear(_sunlight, 0, _sunlight.Length);
     }
 
     /// <summary>

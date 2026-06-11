@@ -82,9 +82,10 @@ public sealed class PlayerController
 
         int dx = ms.X - cx;
         int dy = ms.Y - cy;
+        if (PlayerSettings.InvertMouseY) dy = -dy;
 
         _camera.Yaw   += dx * MouseSensitivity;   // mouse right → turn right
-        _camera.Pitch -= -dy * MouseSensitivity;   // mouse up (dy<0) → look up
+        _camera.Pitch -= dy * MouseSensitivity;   // mouse up (dy<0) → look up
 
         Mouse.SetPosition(cx, cy);
     }

@@ -12,7 +12,8 @@
 //   WASD         — move              Space / LeftShift — fly up/down
 //   Mouse        — look              Left click        — break block
 //   Right click  — place block       1/2/3             — select block type
-//   F3           — toggle wireframe  F5                — manual save
+//   F3           — toggle wireframe  F4                — toggle lighting debug
+//   F5           — manual save
 //   Tab          — release mouse cursor
 //   Escape       — quit (saves first)
 
@@ -104,7 +105,7 @@ public class VoxGame : Game
         _effect = new BasicEffect(GraphicsDevice)
         {
             TextureEnabled     = true,
-            VertexColorEnabled = false,
+            VertexColorEnabled = true,
             LightingEnabled    = false,
             Texture            = _atlas,
         };
@@ -120,6 +121,10 @@ public class VoxGame : Game
         // F3 toggles wireframe rendering
         if (kb.IsKeyDown(Keys.F3) && !_prevKeyboard.IsKeyDown(Keys.F3))
             _wireframe = !_wireframe;
+
+        // F4 toggles lighting debug view (vertex colours without texture)
+        if (kb.IsKeyDown(Keys.F4) && !_prevKeyboard.IsKeyDown(Keys.F4))
+            _worldRenderer.DebugLighting = !_worldRenderer.DebugLighting;
 
         // F5 — manual save (non-blocking; queues dirty chunks for background write)
         if (kb.IsKeyDown(Keys.F5) && !_prevKeyboard.IsKeyDown(Keys.F5))
@@ -155,11 +160,7 @@ public class VoxGame : Game
         _effect.Projection = _camera.Projection;
         _effect.World      = Matrix.Identity;
 
-        foreach (var pass in _effect.CurrentTechnique.Passes)
-        {
-            pass.Apply();
-            _worldRenderer.Draw(GraphicsDevice);
-        }
+        _worldRenderer.Draw(GraphicsDevice, _effect);
 
         base.Draw(gameTime);
     }
