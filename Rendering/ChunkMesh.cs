@@ -2,6 +2,11 @@
 // Only visible faces are emitted — faces shared with a solid neighbour are skipped.
 // Neighbour lookups cross chunk boundaries via the World reference.
 // The mesh is rebuilt lazily: call Build() when Chunk.IsDirty is true.
+//
+// Texture pipeline per face (all UV work happens here, never in the render loop):
+//   block ID + BlockFace  →  BlockRegistry.GetTextureForFace  →  tileIndex
+//   tileIndex             →  TextureAtlas.GetUVs              →  4 UV corners
+//
 // CullMode.None is used in the prototype so winding order is not critical,
 // but faces are defined consistently (top-left → top-right → bottom-right → bottom-left)
 // to make future backface-culling easy to enable.
@@ -17,17 +22,18 @@ namespace Vox.AI.Rendering;
 
 public sealed class ChunkMesh : IDisposable
 {
-    private VertexBuffer _vertexBuffer;
-    private IndexBuffer  _indexBuffer;
+    private VertexBuffer? _vertexBuffer;
+    private IndexBuffer?  _indexBuffer;
     private int           _indexCount;
 
     public bool IsEmpty => _indexCount == 0;
 
-    // Face index → (dx, dy, dz) neighbour offsets
+    // Face index → (dx, dy, dz) neighbour offsets.
+    // Values must stay in sync with the BlockFace enum.
     private static readonly (int dx, int dy, int dz)[] FaceDir =
     {
-        ( 0,  1,  0),  // 0 Top
-        ( 0, -1,  0),  // 1 Bottom
+        ( 0,  1,  0),  // 0 Top    (+Y)
+        ( 0, -1,  0),  // 1 Bottom (-Y)
         ( 0,  0,  1),  // 2 Front  (+Z)
         ( 0,  0, -1),  // 3 Back   (-Z)
         ( 1,  0,  0),  // 4 Right  (+X)
@@ -50,16 +56,14 @@ public sealed class ChunkMesh : IDisposable
             byte id = chunk.GetBlock(lx, ly, lz);
             if (!BlockRegistry.IsSolid(id)) continue;
 
-            ref readonly var def = ref BlockRegistry.Get(id);
-
             // World-space block origin
             float bx = chunk.WorldPosition.X + lx;
             float by = chunk.WorldPosition.Y + ly;
             float bz = chunk.WorldPosition.Z + lz;
 
-            for (int face = 0; face < 6; face++)
+            for (int faceIdx = 0; faceIdx < 6; faceIdx++)
             {
-                var (dx, dy, dz) = FaceDir[face];
+                var (dx, dy, dz) = FaceDir[faceIdx];
 
                 // Resolve neighbour — prefer local chunk, fall back to world query
                 int nx = lx + dx, ny = ly + dy, nz = lz + dz;
@@ -69,21 +73,22 @@ public sealed class ChunkMesh : IDisposable
                     ? chunk.GetBlock(nx, ny, nz)
                     : world.GetBlock((int)(bx + dx), (int)(by + dy), (int)(bz + dz));
 
-                if (BlockRegistry.IsSolid(neighbour)) continue;  // hidden face
+                if (BlockRegistry.IsSolid(neighbour)) continue;   // face is hidden
 
-                var (col, row) = def.FaceTiles[face];
-                var (tl, tr, br, bl) = TextureAtlas.GetUVs(col, row);
+                // Resolve tile index via registry — no raw atlas coordinates here
+                int tileIndex = BlockRegistry.GetTextureForFace(id, (BlockFace)faceIdx);
+                var (tl, tr, br, bl) = TextureAtlas.GetUVs(tileIndex);
 
                 int baseIdx = vertices.Count;
-                AddFaceVertices(vertices, bx, by, bz, face, tl, tr, br, bl);
+                AddFaceVertices(vertices, bx, by, bz, faceIdx, tl, tr, br, bl);
 
-                // Two counter-clockwise triangles (standard for faces viewed from outside)
+                // Two triangles per face (counter-clockwise — faces viewed from outside)
                 indices.Add(baseIdx + 0); indices.Add(baseIdx + 1); indices.Add(baseIdx + 2);
                 indices.Add(baseIdx + 0); indices.Add(baseIdx + 2); indices.Add(baseIdx + 3);
             }
         }
 
-        // Dispose old buffers before uploading new ones
+        // Dispose old GPU buffers before uploading new ones
         _vertexBuffer?.Dispose();
         _indexBuffer?.Dispose();
         _vertexBuffer = null;
@@ -101,7 +106,7 @@ public sealed class ChunkMesh : IDisposable
         _indexBuffer.SetData(indices.ToArray());
     }
 
-    // Emits 4 vertices for a face in the order: top-left, top-right, bottom-right, bottom-left.
+    // Emits 4 vertices for a face in order: top-left, top-right, bottom-right, bottom-left.
     private static void AddFaceVertices(
         List<VertexPositionTexture> verts,
         float bx, float by, float bz, int face,
@@ -164,3 +169,4 @@ public sealed class ChunkMesh : IDisposable
         _indexBuffer?.Dispose();
     }
 }
+

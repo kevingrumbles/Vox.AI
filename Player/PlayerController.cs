@@ -124,6 +124,9 @@ public sealed class PlayerController
         if (kb.IsKeyDown(Keys.D1)) PlaceBlockId = BlockId.Grass;
         if (kb.IsKeyDown(Keys.D2)) PlaceBlockId = BlockId.Dirt;
         if (kb.IsKeyDown(Keys.D3)) PlaceBlockId = BlockId.Stone;
+        if (kb.IsKeyDown(Keys.D4)) PlaceBlockId = BlockId.Sand;
+        if (kb.IsKeyDown(Keys.D5)) PlaceBlockId = BlockId.Wood;
+        if (kb.IsKeyDown(Keys.D6)) PlaceBlockId = BlockId.Leaves;
     }
 
     // -----------------------------------------------------------------------
