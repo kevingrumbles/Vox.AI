@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="Art\Vox.AI.Atlas.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 </Project>

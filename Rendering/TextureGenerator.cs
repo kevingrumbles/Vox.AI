@@ -60,29 +60,29 @@ public static class TextureGenerator
         // -----------------------------------------------------------------------
         // Row 0
         // -----------------------------------------------------------------------
-        PaintChecker(data,   AtlasTile.GrassTop,  new Color( 88, 148,  50), 0.85f);  // bright green
-        PaintGradient(data,  AtlasTile.GrassSide, new Color( 72, 110,  45), new Color(130, 90, 50));
-        PaintChecker(data,   AtlasTile.Dirt,      new Color(130,  90,  50), 0.88f);  // earthy brown
-        PaintChecker(data,   AtlasTile.Stone,     new Color(115, 115, 115), 0.88f);  // grey
+        PaintGradient(data,  AtlasTile.GrassTop,  AtlasPalette.GrassTopLight,   AtlasPalette.GrassTopLight);
+        PaintGradient(data,  AtlasTile.GrassSide, AtlasPalette.GrassSideTop,    AtlasPalette.GrassSideBottom);
+        PaintChecker(data,   AtlasTile.Dirt,      AtlasPalette.DirtBase,        0.88f);
+        PaintChecker(data,   AtlasTile.Stone,     AtlasPalette.StoneBase,       0.48f);
 
         // -----------------------------------------------------------------------
         // Row 1
         // -----------------------------------------------------------------------
-        PaintChecker(data,   AtlasTile.Sand,      new Color(240, 215, 130), 0.90f);  // sandy yellow
-        PaintChecker(data,   AtlasTile.Water,     new Color( 40,  80, 200), 0.92f);  // blue
-        PaintRings(data,     AtlasTile.WoodTop,   new Color(180, 130,  70), new Color(140, 100, 55));
-        PaintGradient(data,  AtlasTile.WoodSide,  new Color(160, 115,  60), new Color(120,  85, 45));
+        PaintChecker(data,   AtlasTile.Sand,      AtlasPalette.SandBase,        0.90f);
+        PaintChecker(data,   AtlasTile.Water,     AtlasPalette.WaterBase,       0.92f);
+        PaintRings(data,     AtlasTile.WoodTop,   AtlasPalette.WoodRingLight,   AtlasPalette.WoodRingDark);
+        PaintGradient(data,  AtlasTile.WoodSide,  AtlasPalette.WoodSideTop,     AtlasPalette.WoodSideBottom);
 
         // -----------------------------------------------------------------------
         // Row 2
         // -----------------------------------------------------------------------
-        PaintStipple(data,   AtlasTile.Leaves,    new Color( 50, 100,  30), new Color( 35,  75, 20));
+        PaintStipple(data,   AtlasTile.Leaves,    AtlasPalette.LeavesPrimary,   AtlasPalette.LeavesSecondary);
 
         // -----------------------------------------------------------------------
         // Tiles 9–15: magenta "missing texture" fallback
         // -----------------------------------------------------------------------
         for (int tile = 9; tile < TextureAtlas.Columns * TextureAtlas.Rows; tile++)
-            PaintSolid(data, tile, new Color(200, 0, 200));
+            PaintSolid(data, tile, AtlasPalette.MissingTexture);
 
         texture.SetData(data);
         return texture;
