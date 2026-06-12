@@ -11,6 +11,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Vox.AI.Blocks;
 using Vox.AI.Core;
+using Vox.AI.World.Lighting;
 
 namespace Vox.AI.Player;
 
@@ -18,6 +19,7 @@ public sealed class PlayerController
 {
     private readonly Camera              _camera;
     private readonly Vox.AI.World.World  _world;
+    private readonly LightingManager     _lighting;
 
     public const float MoveSpeed        = 8f;
     public const float MouseSensitivity = 0.003f;
@@ -31,10 +33,11 @@ public sealed class PlayerController
     /// <summary>Block type placed on right-click. Change with keys 1–3.</summary>
     public byte PlaceBlockId { get; set; } = BlockId.Dirt;
 
-    public PlayerController(Camera camera, Vox.AI.World.World world)
+    public PlayerController(Camera camera, Vox.AI.World.World world, LightingManager lighting)
     {
-        _camera = camera;
-        _world  = world;
+        _camera   = camera;
+        _world    = world;
+        _lighting = lighting;
     }
 
     public void Update(GameTime gameTime, Game game)
@@ -159,9 +162,15 @@ public sealed class PlayerController
             if (BlockRegistry.IsSolid(_world.GetBlock(bx, by, bz)))
             {
                 if (leftClick)
+                {
                     _world.SetBlock(bx, by, bz, BlockId.Air);
+                    _lighting.OnBlockChanged(bx, by, bz, BlockId.Air);
+                }
                 else if (rightClick && hasLastAir)
+                {
                     _world.SetBlock(lastAirX, lastAirY, lastAirZ, PlaceBlockId);
+                    _lighting.OnBlockChanged(lastAirX, lastAirY, lastAirZ, PlaceBlockId);
+                }
                 return;
             }
 

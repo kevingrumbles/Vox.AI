@@ -75,6 +75,24 @@ public class World
         GetChunk(cx, cy, cz)?.SetBlock(lx, ly, lz, id);
     }
 
+    /// <summary>Returns the sunlight level (0–15) at world-space coordinates, or 0 if unloaded.</summary>
+    public byte GetSunlight(int wx, int wy, int wz)
+    {
+        var (cx, lx) = ToChunkLocal(wx);
+        var (cy, ly) = ToChunkLocal(wy);
+        var (cz, lz) = ToChunkLocal(wz);
+        return GetChunk(cx, cy, cz)?.GetSunlight(lx, ly, lz) ?? 0;
+    }
+
+    /// <summary>Sets the sunlight level at world-space coordinates. No-op if the chunk is not loaded.</summary>
+    public void SetSunlight(int wx, int wy, int wz, byte level)
+    {
+        var (cx, lx) = ToChunkLocal(wx);
+        var (cy, ly) = ToChunkLocal(wy);
+        var (cz, lz) = ToChunkLocal(wz);
+        GetChunk(cx, cy, cz)?.SetSunlight(lx, ly, lz, level);
+    }
+
     /// <summary>
     /// Queues all dirty chunks for background save and writes world.meta.
     /// Non-blocking — returns after enqueuing; use FlushAndSave for a guaranteed write.

@@ -1,10 +1,12 @@
 // Architecture: Owns all ChunkMesh objects and drives the dirty-mesh rebuild loop.
 // Keeps rendering concerns (GPU buffers) separated from world data (Chunk).
 //
-// Update() order per dirty chunk:
-//   1. LightingManager.RecalculateSunlight  — must run before mesh build
-//   2. ChunkMesh.Build                      — bakes lighting into vertex colours
-//   3. chunk.IsDirty = false
+// Update() order each frame:
+//   1. LightingManager.ProcessQueue — drains BFS budget; marks touched chunks dirty.
+//   2. For each dirty chunk: ChunkMesh.Build → chunk.IsDirty = false.
+//
+// Lighting is processed once per frame before any mesh rebuild.
+// No per-chunk lighting recalculation; no world-wide flood fill.
 //
 // Debug mode (F4): switches BasicEffect to show only vertex colours (no texture),
 // making sunlight and AO values directly visible on the mesh.
@@ -21,6 +23,7 @@ public sealed class WorldRenderer : IDisposable
 {
     private readonly Dictionary<(int, int, int), ChunkMesh> _meshes = new();
     private readonly Vox.AI.World.World _world;
+    private readonly LightingManager    _lighting;
 
     /// <summary>
     /// When true the renderer displays raw vertex colours (lighting values) without texture.
@@ -28,20 +31,25 @@ public sealed class WorldRenderer : IDisposable
     /// </summary>
     public bool DebugLighting { get; set; }
 
-    public WorldRenderer(Vox.AI.World.World world) => _world = world;
+    public WorldRenderer(Vox.AI.World.World world, LightingManager lighting)
+    {
+        _world    = world;
+        _lighting = lighting;
+    }
 
     /// <summary>
-    /// Recalculates lighting and rebuilds meshes for any chunk marked dirty.
+    /// Drains the lighting queue (up to budget), then rebuilds meshes for dirty chunks.
     /// Call once per frame before Draw.
     /// </summary>
     public void Update(GraphicsDevice device)
     {
+        // Process incremental lighting work first so any newly dirtied chunks
+        // are caught in the mesh-rebuild pass below.
+        _lighting.ProcessQueue();
+
         foreach (var chunk in _world.Chunks)
         {
             if (!chunk.IsDirty) continue;
-
-            // Lighting must be current before mesh vertices are baked
-            LightingManager.RecalculateSunlight(chunk);
 
             if (!_meshes.TryGetValue(chunk.ChunkCoord, out var mesh))
             {

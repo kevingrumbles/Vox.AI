@@ -89,8 +89,12 @@ public class VoxGame : Game
         // Spawn above the terrain centre; terrain height is roughly 6–14 blocks
         _camera = new Camera(new Vector3(8f, 22f, 8f), aspect);
 
-        _worldRenderer = new WorldRenderer(_world);
-        _player        = new PlayerController(_camera, _world);
+        var lighting = new Vox.AI.World.Lighting.LightingManager(_world);
+        foreach (var chunk in _world.Chunks)
+            lighting.InitialiseChunk(chunk);
+
+        _worldRenderer = new WorldRenderer(_world, lighting);
+        _player        = new PlayerController(_camera, _world, lighting);
 
         _solidState = new RasterizerState { CullMode = CullMode.None, FillMode = FillMode.Solid };
         _wireState  = new RasterizerState { CullMode = CullMode.None, FillMode = FillMode.WireFrame };
